@@ -14,7 +14,7 @@ public interface IQuestionService {
 
     Optional<Question> getQuestionById(Long id);
 
-    List<String> getAllSubject();
+    List<String> getAllsubject();
 
     Question updateQuestion(Long id, Question question) throws ChangeSetPersister.NotFoundException;
 

@@ -8,12 +8,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
-
+import java.util.Optional;
 
 public interface IQuestionRepository extends JpaRepository<Question, Long> {
 
     @Query("SELECT DISTINCT q.subject FROM Question q")
-    List<String> findDistinctSubject();
+    List<String> findDistinctsubject();
 
-    Page<Question> findBySubject(String subject, Pageable pageable);
+    Page<Question> findBysubject(String subject, Pageable pageable);
+    @Query("SELECT MAX(q.id) FROM Question q")
+    Optional<Long> findMaxId();
+
+
 }

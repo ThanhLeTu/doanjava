@@ -1,6 +1,5 @@
 package TranQuocToan.Java.DoAn.Service;
 
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -15,25 +14,24 @@ import java.util.HashMap;
 import java.util.function.Function;
 import java.security.SecureRandom;
 
-
 @Component
 public class JWTUtils {
 
     private SecretKey Key;
-    private static  long EXPIRATION_TIME = 86400000;  //24hours
+    private static long EXPIRATION_TIME = 86400000; // 24hours
 
     public JWTUtils() {
-//        SecureRandom secureRandom = new SecureRandom();
-//        byte[] keyBytes = new byte[32];
-//        secureRandom.nextBytes(keyBytes);
-//        SecretKey secretKey = new SecretKeySpec(keyBytes, "HmacSHA256");
+        // SecureRandom secureRandom = new SecureRandom();
+        // byte[] keyBytes = new byte[32];
+        // secureRandom.nextBytes(keyBytes);
+        // SecretKey secretKey = new SecretKeySpec(keyBytes, "HmacSHA256");
         String secreteString = "5754660ec3d43a9cecccf5cc131b08dcd65f41aee8083ce9b6013f33937857da";
         byte[] keyBytes = Base64.getDecoder().decode(secreteString.getBytes(StandardCharsets.UTF_8));
         this.Key = new SecretKeySpec(keyBytes, "HmacSHA256");
 
     }
 
-    public String generateToken(UserDetails userDetails){
+    public String generateToken(UserDetails userDetails) {
         return Jwts.builder()
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
@@ -42,9 +40,7 @@ public class JWTUtils {
                 .compact();
     }
 
-
-
-    public  String generateRefreshToken(HashMap<String, Object> claims, UserDetails userDetails){
+    public String generateRefreshToken(HashMap<String, Object> claims, UserDetails userDetails) {
         return Jwts.builder()
                 .claims(claims)
                 .subject(userDetails.getUsername())
@@ -53,11 +49,12 @@ public class JWTUtils {
                 .signWith(Key)
                 .compact();
     }
-    public  String extractUsername(String token){
-        return  extractClaims(token, Claims::getSubject);
+
+    public String extractUsername(String token) {
+        return extractClaims(token, Claims::getSubject);
     }
 
-    private <T> T extractClaims(String token, Function<Claims, T> claimsTFunction){
+    private <T> T extractClaims(String token, Function<Claims, T> claimsTFunction) {
         return claimsTFunction
                 .apply(Jwts.parser()
                         .verifyWith(Key)
@@ -66,17 +63,13 @@ public class JWTUtils {
                         .getPayload());
     }
 
-
-
-    public  boolean isTokenExpired(String token){
+    public boolean isTokenExpired(String token) {
         return extractClaims(token, Claims::getExpiration).before(new Date());
     }
 
-    public  boolean isTokenValid(String token, UserDetails userDetails){
+    public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
-
-
 
 }
