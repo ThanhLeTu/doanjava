@@ -25,7 +25,10 @@ public class UploadFileController {
 
 
     @PostMapping("/upload")
-    public String uploadFile(@RequestParam("file") MultipartFile file
+    public String uploadFile(@RequestParam("file") MultipartFile file,
+                             @RequestParam("subject") String subject, // Thêm subject từ request
+                             @RequestParam("questionType") String questionType // Thêm questionType từ request
+
 
     ) {
         if (file.isEmpty()) {
@@ -38,8 +41,8 @@ public class UploadFileController {
             // Đọc bảng để lấy đáp án đúng
             Map<Integer, String> correctAnswersMap = parseAnswerTable(doc);
 
-            // Đọc câu hỏi và lựa chọn từ các đoạn văn bản
-            parseQuestionsAndChoices(doc, correctAnswersMap);
+            // Gọi parseQuestionsAndChoices và truyền thêm subject, questionType
+            parseQuestionsAndChoices(doc, correctAnswersMap, subject, questionType);
 
             return "File uploaded and processed successfully!";
         } catch (Exception e) {
@@ -88,7 +91,10 @@ public class UploadFileController {
     }
 
 
-    private void parseQuestionsAndChoices(XWPFDocument doc, Map<Integer, String> correctAnswersMap
+    private void parseQuestionsAndChoices(XWPFDocument doc, Map<Integer, String> correctAnswersMap,
+                                          String subject,
+                                          String questionType
+
     ) {
         List<String> currentChoices = new ArrayList<>();
         Question currentQuestion = null;
@@ -108,6 +114,8 @@ public class UploadFileController {
 
                 currentQuestion = new Question();
                 currentQuestion.setQuestionText(questionText);
+                currentQuestion.setSubject(subject); // Lưu subject từ frontend
+                currentQuestion.setQuestionType(questionType); // Lưu questionType từ frontend
 
                 currentChoices.clear();
 
