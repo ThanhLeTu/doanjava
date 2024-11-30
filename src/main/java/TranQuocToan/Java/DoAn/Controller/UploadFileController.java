@@ -14,10 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api")
@@ -28,7 +25,9 @@ public class UploadFileController {
 
 
     @PostMapping("/upload")
-    public String uploadFile(@RequestParam("file") MultipartFile file) {
+    public String uploadFile(@RequestParam("file") MultipartFile file
+
+    ) {
         if (file.isEmpty()) {
             return "No file uploaded!";
         }
@@ -89,7 +88,8 @@ public class UploadFileController {
     }
 
 
-    private void parseQuestionsAndChoices(XWPFDocument doc, Map<Integer, String> correctAnswersMap) {
+    private void parseQuestionsAndChoices(XWPFDocument doc, Map<Integer, String> correctAnswersMap
+    ) {
         List<String> currentChoices = new ArrayList<>();
         Question currentQuestion = null;
 
@@ -108,6 +108,7 @@ public class UploadFileController {
 
                 currentQuestion = new Question();
                 currentQuestion.setQuestionText(questionText);
+
                 currentChoices.clear();
 
             } else if (text.matches("^[A-D]\\..*")) { // Nếu là lựa chọn
@@ -122,6 +123,12 @@ public class UploadFileController {
     }
 
     private void saveQuestion(Question question, List<String> choices, Map<Integer, String> correctAnswersMap) {
+        Optional<Question> existingQuestion = questionRepository.findByQuestionTextIgnoreCase(question.getQuestionText());
+        if (existingQuestion.isPresent()) {
+            System.out.println("Duplicate question found, skipping: " + question.getQuestionText());
+            return;
+        }
+
         question.setChoices(new ArrayList<>(choices));
 
         // Lưu vào repository trước để lấy id
