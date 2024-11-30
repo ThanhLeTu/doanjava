@@ -15,7 +15,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api")
 public class UploadFileController {
@@ -23,47 +26,21 @@ public class UploadFileController {
     @Autowired
     private IQuestionRepository questionRepository;
 
+
     @PostMapping("/upload")
     public String uploadFile(@RequestParam("file") MultipartFile file) {
-
         if (file.isEmpty()) {
             return "No file uploaded!";
         }
 
         try (InputStream inputStream = file.getInputStream()) {
             XWPFDocument doc = new XWPFDocument(inputStream);
-            List<String> currentChoices = new ArrayList<>();
-            Question currentQuestion = null;
 
-            for (XWPFParagraph paragraph : doc.getParagraphs()) {
-                String text = paragraph.getText().trim();
+            // Đọc bảng để lấy đáp án đúng
+            Map<Integer, String> correctAnswersMap = parseAnswerTable(doc);
 
-                // Kiểm tra nếu đoạn văn là câu hỏi
-                if (text.matches("^\\d+\\..*")) {
-                    // Lưu câu hỏi trước đó (nếu có)
-                    if (currentQuestion != null) {
-                        currentQuestion.setChoices(new ArrayList<>(currentChoices));
-                        questionRepository.save(currentQuestion);
-                        currentChoices.clear();
-                    }
-
-                    // Tạo câu hỏi mới
-                    String questionText = text.substring(text.indexOf('.') + 1).trim();
-                    currentQuestion = new Question();
-                    currentQuestion.setQuestionText(questionText);
-
-                } else if (text.matches("^[A-D]\\..*")) {
-                    // Nếu là lựa chọn, thêm vào danh sách
-                    String choiceText = text.substring(2).trim();
-                    currentChoices.add(choiceText);
-                }
-            }
-
-            // Lưu câu hỏi cuối cùng (nếu có)
-            if (currentQuestion != null) {
-                currentQuestion.setChoices(currentChoices);
-                questionRepository.save(currentQuestion);
-            }
+            // Đọc câu hỏi và lựa chọn từ các đoạn văn bản
+            parseQuestionsAndChoices(doc, correctAnswersMap);
 
             return "File uploaded and processed successfully!";
         } catch (Exception e) {
@@ -72,47 +49,93 @@ public class UploadFileController {
         }
     }
 
-
-    // API để upload file và trả về danh sách đáp án
-    @PostMapping("/upload-answer")
-    public List<String> uploadAnswerFile(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) {
-            throw new RuntimeException("No file uploaded!");
-        }
-
-        try (InputStream inputStream = file.getInputStream()) {
-            XWPFDocument doc = new XWPFDocument(inputStream);
-            return extractAnswersFromTable(doc);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error processing file: " + e.getMessage());
-        }
-    }
-
-    // Hàm xử lý tách đáp án từ file
-    private List<String> extractAnswersFromTable(XWPFDocument doc) {
-        List<String> answers = new ArrayList<>();
+    private Map<Integer, String> parseAnswerTable(XWPFDocument doc) {
+        Map<Integer, String> correctAnswersMap = new HashMap<>();
         List<XWPFTable> tables = doc.getTables();
 
-        if (tables.isEmpty()) {
-            return answers; // Không có bảng
-        }
+        if (!tables.isEmpty()) {
+            XWPFTable answerTable = tables.get(0); // Giả sử bảng đầu tiên chứa đáp án
+            List<XWPFTableRow> rows = answerTable.getRows();
 
-        XWPFTable table = tables.get(0); // Giả sử chỉ xử lý bảng đầu tiên
+            for (int i = 0; i < rows.size(); i++) {
+                XWPFTableRow row = rows.get(i);
+                List<String> rowValues = new ArrayList<>();
 
-        for (int i = 1; i < table.getRows().size(); i++) { // Bỏ qua hàng tiêu đề nếu có
-            XWPFTableRow row = table.getRow(i);
+                // Duyệt qua từng ô (cell) trong hàng
+                row.getTableCells().forEach(cell -> rowValues.add(cell.getText().trim()));
 
-            // Kiểm tra nếu hàng có đủ cột và cột đáp án không trống
-            if (row.getTableCells().size() > 1) {
-                String answer = row.getCell(1).getText().trim();
-                if (!answer.isEmpty()) {
-                    answers.add(answer);
+                // Xử lý hàng chứa số thứ tự câu hỏi và đáp án
+                if (i % 2 == 0 && i + 1 < rows.size()) { // Hàng chẵn chứa số câu hỏi, hàng lẻ chứa đáp án
+                    List<String> nextRowValues = new ArrayList<>();
+                    rows.get(i + 1).getTableCells().forEach(cell -> nextRowValues.add(cell.getText().trim()));
+
+                    // Ghép số thứ tự câu hỏi và đáp án tương ứng
+                    for (int j = 0; j < rowValues.size(); j++) {
+                        try {
+                            Integer questionNumber = Integer.parseInt(rowValues.get(j));
+                            String correctAnswer = nextRowValues.get(j);
+                            correctAnswersMap.put(questionNumber, correctAnswer);
+                        } catch (NumberFormatException e) {
+                            System.err.println("Invalid question number format: " + rowValues.get(j));
+                        } catch (IndexOutOfBoundsException e) {
+                            System.err.println("Mismatched question and answer columns at index: " + j);
+                        }
+                    }
                 }
             }
         }
 
-        return answers; // Trả về danh sách đáp án
+        return correctAnswersMap;
     }
 
+
+    private void parseQuestionsAndChoices(XWPFDocument doc, Map<Integer, String> correctAnswersMap) {
+        List<String> currentChoices = new ArrayList<>();
+        Question currentQuestion = null;
+
+        for (XWPFParagraph paragraph : doc.getParagraphs()) {
+            String text = paragraph.getText().trim();
+
+            if (text.matches("^\\d+\\..*")) { // Nếu là câu hỏi
+                // Lưu câu hỏi trước đó
+                if (currentQuestion != null) {
+                    saveQuestion(currentQuestion, currentChoices, correctAnswersMap);
+                }
+
+                // Tạo câu hỏi mới
+                String questionText = text.substring(text.indexOf('.') + 1).trim();
+                Integer questionNumber = Integer.parseInt(text.split("\\.")[0].trim());
+
+                currentQuestion = new Question();
+                currentQuestion.setQuestionText(questionText);
+                currentChoices.clear();
+
+            } else if (text.matches("^[A-D]\\..*")) { // Nếu là lựa chọn
+                currentChoices.add(text.trim());
+            }
+        }
+
+        // Lưu câu hỏi cuối cùng
+        if (currentQuestion != null) {
+            saveQuestion(currentQuestion, currentChoices, correctAnswersMap);
+        }
+    }
+
+    private void saveQuestion(Question question, List<String> choices, Map<Integer, String> correctAnswersMap) {
+        question.setChoices(new ArrayList<>(choices));
+
+        // Lưu vào repository trước để lấy id
+        question = questionRepository.save(question);
+
+        Long id = question.getId(); // Lấy id sau khi lưu
+        if (id != null && correctAnswersMap.containsKey(id.intValue())) {
+            List<String> correctAnswers = new ArrayList<>();
+            correctAnswers.add(correctAnswersMap.get(id.intValue()));
+            question.setCorrectAnswers(correctAnswers);
+            questionRepository.save(question); // Cập nhật lại câu hỏi
+        }
+    }
+
+
 }
+
